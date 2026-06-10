@@ -108,7 +108,11 @@ let scores = [],
   bestHeist = 0,
   lastCash = 0,
   heist = 0,
-  freeze = 0;
+  freeze = 0,
+  fever = 0,
+  hackZone = null,
+  hackT = 15000,
+  hackP = 0;
 let combo = 0,
   comboT = 0,
   bestCombo = 0,
@@ -263,6 +267,19 @@ function makeTex() {
         yy = h / 2 + S(a) * d;
       i ? x.lineTo(xx, yy) : x.moveTo(xx, yy);
     }
+    x.closePath();
+    x.fill();
+    x.stroke();
+  });
+  tex("thief", 20, 20, (x, w, h) => {
+    x.shadowColor = "#ffea00";
+    x.strokeStyle = "#ffea00";
+    x.fillStyle = "#1b1a02";
+    x.lineWidth = 2;
+    x.beginPath();
+    x.moveTo(w / 2, 2);
+    x.lineTo(w - 2, h - 2);
+    x.lineTo(2, h - 2);
     x.closePath();
     x.fill();
     x.stroke();
@@ -717,6 +734,10 @@ function clearRun() {
   if (bossBar) bossBar.clear();
   if (boss) boss.destroy();
   boss = null;
+  hackZone = null;
+  hackT = 15000;
+  hackP = 0;
+  fever = 0;
   players.forEach((p) => {
     if (p.sprite) p.sprite.destroy();
     if (p.statusText) p.statusText.destroy();
@@ -745,6 +766,10 @@ function startGame(n) {
   comboT = 0;
   bestCombo = 0;
   parry = 0;
+  fever = 0;
+  hackZone = null;
+  hackT = 15000;
+  hackP = 0;
   up = {};
   evt = evtT = evtCd = evtUsed = evtAt = 0;
   bounty = null;
@@ -897,9 +922,12 @@ function startEvent() {
 }
 function spawnEnemy() {
   const side = R() > .5, x = side ? -30 : W + 30, y = 50 + R() * (H - 100), pool = ['runner', 'runner', 'gunner', wave > 2 ? 'mine' : 'runner', wave > 3 ? 'splitter' : 'runner'];
-  const type = pool[F(R() * pool.length)], e = scene.physics.add.sprite(x, y, type);
-  const gr = greed(); e.type = type; e.hp = (type === 'gunner' || type === 'splitter' ? 2 + F(wave / 5) : 1 + F(wave / 6)) + F(dif / 2) + (gr > 75 ? 1 : 0); e.t = 350 + R() * 650; e.val = type === 'mine' ? 90 : type === 'gunner' ? 125 : type === 'splitter' ? 145 : 105; enemies.add(e);
+  let type = pool[F(R() * pool.length)];
+  if (R() < 0.08 && stash > 300 && !enemies.getChildren().some(e => e.type === 'thief')) type = 'thief';
+  const e = scene.physics.add.sprite(x, y, type);
+  const gr = greed(); e.type = type; e.hp = (type === 'gunner' || type === 'splitter' ? 2 + F(wave / 5) : 1 + F(wave / 6)) + F(dif / 2) + (gr > 75 ? 1 : 0); e.t = 350 + R() * 650; e.val = type === 'mine' ? 90 : type === 'gunner' ? 125 : type === 'splitter' ? 145 : type === 'thief' ? 180 : 105; enemies.add(e);
   if (type === 'splitter') e.setTint(0xaa66ff);
+  if (type === 'thief') e.setTint(0xffea00);
   if (evt === 3 && !bounty) setBounty(e);
 }
 function spawnMega() {
@@ -922,7 +950,7 @@ function spawnBoss() {
 }
 function greed() {
   return MN(
-    99,
+    100,
     F(stash / 140 + (mult - 1) * 9 + heat * 0.38 + (extract > 0 ? 25 : 0)),
   );
 }
@@ -932,7 +960,8 @@ function loot(v, why, x = W / 2, y = H / 2) {
       mult *
       (1 + greed() / 260) *
       (1 + MN(combo, 35) / 120) *
-      (evt === 2 ? 2 : 1),
+      (evt === 2 ? 2 : 1) *
+      (fever ? 3 : 1),
   );
   stash += add;
   heat = MN(99, heat + (2 + mult * 0.45) * DS[dif]);
@@ -986,6 +1015,11 @@ function finishCashout() {
 }
 function burn(p, dmg) {
   if (p.inv > 0 || p.dash > 0) return;
+  if (hackZone) hackP = 0;
+  if (fever) {
+    p.hp = 0;
+    p.shield = 0;
+  }
   if (p.shield > 0) {
     p.shield = 0;
     p.inv = 650;
@@ -1108,6 +1142,9 @@ function takePower(p, u) {
 }
 function kill(e, p, beam) {
   addCombo(e.x, e.y);
+  if (e.type === 'thief' && e.stolen) {
+    loot(e.stolen * 3 + 100, "¡BOTÍN RECUPERADO x3!", e.x, e.y);
+  }
   const v = F(e.val * (beam ? 0.55 : 1));
   loot(
     v,
@@ -1382,10 +1419,58 @@ function update(time, delta) {
       ),
         fx.fillRect(0, 0, W, H));
   }
+  
+  fever = greed() >= 100;
+  if (fever) {
+    fx.fillStyle(0xff00b3, 0.05 + 0.03 * S(time / 60));
+    fx.fillRect(0, 0, W, H);
+  }
+
   hudText();
   if (freeze > 0) (fx.fillStyle(0x88ccff, 0.06), fx.fillRect(0, 0, W, H));
 
   if (state === "PLAY") {
+    if (wave > 1) {
+      hackT -= delta;
+      if (hackT <= 0 && !hackZone) {
+        hackZone = { x: 100 + R() * (W - 200), y: 100 + R() * (H - 200) };
+        pop(hackZone.x, hackZone.y - 30, "ZONA DE HACKEO", "#00f3ff", 1.2);
+      }
+      if (hackZone) {
+        fx.lineStyle(3, 0x00f3ff, 0.5 + 0.3 * S(time / 100));
+        fx.strokeCircle(hackZone.x, hackZone.y, 60);
+        let hacking = false;
+        players.forEach(p => {
+          if (p.hp > 0 && Phaser.Math.Distance.Between(p.sprite.x, p.sprite.y, hackZone.x, hackZone.y) < 60) {
+            hacking = true;
+          }
+        });
+        if (hacking) {
+          hackP += delta;
+          fx.fillStyle(0x00f3ff, 0.3);
+          fx.beginPath();
+          fx.moveTo(hackZone.x, hackZone.y);
+          fx.arc(hackZone.x, hackZone.y, 60, -P / 2, -P / 2 + (hackP / 3000) * P * 2);
+          fx.fillPath();
+          if (hackP >= 3000) {
+            pop(hackZone.x, hackZone.y, "¡HACK COMPLETADO!", "#22ff88", 1.5);
+            snd("jack", 1, 1.2);
+            for (let i = 0; i < 15; i++) {
+              const c = scene.physics.add.sprite(hackZone.x, hackZone.y, "core");
+              c.val = 150;
+              c.body.setVelocity((R() - 0.5) * 400, (R() - 0.5) * 400);
+              c.body.setDrag(150);
+              cores.add(c);
+            }
+            hackZone = null;
+            hackT = 25000;
+            hackP = 0;
+          }
+        } else {
+          hackP = MX(0, hackP - delta * 2);
+        }
+      }
+    }
     // Wave timer progress bar
     const maxH = MX(60000, 90000 - wave * 2500);
     const ratio = MX(0, MN(1, heist / maxH));
@@ -1493,8 +1578,8 @@ function update(time, delta) {
     }
     if (p.slash > 0) {
       const a = p.sprite.rotation,
-        rr = (p.over > 0 ? 78 : 58) + (up[0] || 0) * 10;
-      fx.lineStyle(p.over > 0 ? 9 : 6, p.color, 1);
+        rr = (p.over > 0 || fever ? 78 : 58) + (up[0] || 0) * 10;
+      fx.lineStyle(p.over > 0 || fever ? 9 : 6, p.color, 1);
       fx.beginPath();
       fx.arc(p.sprite.x, p.sprite.y, rr, a - 1.15, a + 1.15);
       fx.strokePath();
@@ -1517,6 +1602,16 @@ function update(time, delta) {
           pop(en.x, en.y - 20, "¡DETONACIÓN!", "#ffea00", 1.25);
           snd("zap", 0.7, 1.4);
           boom(en.x, en.y, GOLD, 8);
+          enemies.getChildren().forEach(e2 => {
+            if (e2 !== en && e2.active && Phaser.Math.Distance.Between(en.x, en.y, e2.x, e2.y) < 130) {
+              e2.hp -= 1;
+              e2.mark = p.id;
+              e2.setTint(GOLD);
+              const a2 = Math.atan2(e2.y - en.y, e2.x - en.x);
+              e2.body.setVelocity(C(a2) * 450, S(a2) * 450);
+              if (e2.hp <= 0) kill(e2, p);
+            }
+          });
         }
         en.hp -= dmg;
         en.setTint(0xffffff);
@@ -1534,13 +1629,23 @@ function update(time, delta) {
           return;
         b.owner = p.id;
         b.setTint(p.color);
-        b.ang = a;
-        b.base = 760;
+        let closest = null, minDist = 9999;
+        enemies.getChildren().forEach(e => {
+          if (!e.active) return;
+          const d = Phaser.Math.Distance.Between(b.x, b.y, e.x, e.y);
+          if (d < minDist) { minDist = d; closest = e; }
+        });
+        if (boss && boss.active) {
+          const d = Phaser.Math.Distance.Between(b.x, b.y, boss.x, boss.y);
+          if (d < minDist) { minDist = d; closest = boss; }
+        }
+        b.ang = closest ? Math.atan2(closest.y - b.y, closest.x - b.x) : a;
+        b.base = 1100;
         b.ric = up[6] || 0;
         parry++;
         if (parry === 5) medal("¡ANTIBALAS!", "#00f3ff");
         boost(0.2);
-        loot(70, "PARRY", b.x, b.y);
+        loot(70, "PARRY LETAL", b.x, b.y);
         snd("zap", 0.8, 1.5);
         stop = 18;
         scene.physics.pause();
@@ -1688,7 +1793,17 @@ function update(time, delta) {
         target.sprite.y,
       );
     e.setRotation(a);
-    if (e.type === "gunner" && d < 285) {
+    if (e.type === "thief") {
+      if (e.flee) {
+        const aFlee = Math.atan2(e.y - H / 2, e.x - W / 2);
+        e.setRotation(aFlee);
+        e.body.setVelocity(C(aFlee) * 350 * fr, S(aFlee) * 350 * fr);
+        if (e.x < -50 || e.x > W + 50 || e.y < -50 || e.y > H + 50) e.destroy();
+      } else {
+        e.setRotation(a);
+        e.body.setVelocity(C(a) * 280 * fr, S(a) * 280 * fr);
+      }
+    } else if (e.type === "gunner" && d < 285) {
       e.body.setVelocity(0, 0);
       e.t -= delta * fr;
       if (e.t <= 0)
@@ -1714,10 +1829,23 @@ function update(time, delta) {
           e.getBounds(),
           p.sprite.getBounds(),
         )
-      )
-        e.type === "mine"
-          ? (boom(e.x, e.y, RED, 28), e.destroy(), burn(p, 1))
-          : burn(p, 1);
+      ) {
+        if (e.type === "thief" && !e.flee) {
+          const stole = F(stash * 0.5);
+          if (stole > 0 && p.inv <= 0 && p.dash <= 0 && !fever) {
+            stash -= stole;
+            e.stolen = stole;
+            e.flee = 1;
+            pop(e.x, e.y - 20, "¡ROBADO -$" + stole + "!", "#ffea00", 1.2);
+            snd("hit", 1, 1.5);
+            hudText();
+          } else burn(p, 1);
+        } else if (e.type === "mine") {
+          boom(e.x, e.y, RED, 28); e.destroy(); burn(p, 1);
+        } else if (e.type !== "thief" || !e.flee) {
+          burn(p, 1);
+        }
+      }
     });
   });
   if (mode === 2 && alive.length === 2) {
@@ -1770,7 +1898,7 @@ function update(time, delta) {
         )
           (b.destroy(), burn(p, 1));
       });
-    else
+    else {
       enemies.getChildren().forEach((e) => {
         if (!b.active) return;
         if (
@@ -1780,10 +1908,20 @@ function update(time, delta) {
           )
         )
           (b.destroy(),
-            (e.hp -= 2),
+            (e.hp -= 15),
             e.hp <= 0 &&
               kill(e, players.find((p) => p.id === b.owner) || players[0]));
       });
+      if (boss && b.active && b.owner !== "enemy" && Phaser.Geom.Intersects.RectangleToRectangle(b.getBounds(), boss.getBounds())) {
+        b.destroy();
+        boss.hp -= 10;
+        boss.hit = 110;
+        boss.setTint(0xffffff);
+        loot(100, "PARRY GUARDIÁN", boss.x, boss.y);
+        snd("hit", 1, 0.85);
+        if (boss.hp <= 0) defeatBoss();
+      }
+    }
   });
   if (boss) {
     boss.hit -= delta;
