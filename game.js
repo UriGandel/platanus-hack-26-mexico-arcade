@@ -133,12 +133,18 @@ let combo = 0,
   chal = 0,
   chalDone = 0,
   maxGreed = 0,
-  runCash = 0;
+  runCash = 0,
+  hi = 0,
+  hiBeat = 0,
+  taughtCash = 0,
+  milestone = 0,
+  contract = 0;
 let ac,
   gain,
   filter,
   sounds = {},
   beat,
+  cdSec = 0,
   step = 0,
   next = 0;
 const COL = [0x00f3ff, 0xff00b3],
@@ -161,6 +167,13 @@ const UP = [
 ];
 const EV = ["", "LLUVIA DE NÚCLEOS", "DOBLE BOTÍN", "BLANCO DE RECOMPENSA"];
 const CH = ["COMBO x10", "PARRY x5", "CASHOUT 5K", "OLA SIN DAÑO"];
+// [nombre, lootMul, enemySpeedMul, greedMul, hpDelta]
+const CT = [
+  ["LIBRE", 1, 1, 1, 0],
+  ["RUSH: +RÁPIDOS, +25% LOOT", 1.25, 1.28, 1, 0],
+  ["AVARO: GREED SUBE x2", 1.15, 1, 2, 0],
+  ["KAMIKAZE: -1 HP MÁX, +45% LOOT", 1.45, 1.08, 1, -1],
+];
 
 new Phaser.Game({
   type: Phaser.AUTO,
@@ -444,7 +457,7 @@ function music(on) {
   step = 0;
   beat = setInterval(() => {
     while (next < ac.currentTime + 0.08) {
-      const hype = heat / 100 + greed() / 140 + (extract > 0 ? 0.45 : 0),
+      const hype = heat / 100 + greed() / 140 + (extract > 0 ? 0.45 : 0) + (fever ? 0.5 : 0) + (boss && boss.p2 ? 0.6 : 0),
         f = [55, 65.4, 73.4, 82.4][step % 4] * (1 + heat / 110);
       try {
         const o = ac.createOscillator(),
@@ -552,6 +565,9 @@ function create() {
     .setOrigin(0.5);
   ui.bank = this.add
     .text(22, 14, "", { font: "bold 22px Courier New", fill: "#fff" })
+    .setVisible(false);
+  ui.rec = this.add
+    .text(22, 40, "", { font: "bold 13px Courier New", fill: "#ffea00" })
     .setVisible(false);
   ui.loot = this.add
     .text(W - 22, 14, "", { font: "bold 22px Courier New", fill: "#22ff88" })
@@ -690,6 +706,15 @@ function create() {
       .setOrigin(0.5)
       .setVisible(false),
   );
+  ui.retry = this.add
+    .text(W / 2, 416, "", {
+      font: "bold 24px Courier New",
+      fill: "#22ff88",
+      align: "center",
+    })
+    .setOrigin(0.5)
+    .setVisible(false)
+    .setDepth(55);
   ui.boardTitle = this.add
     .text(W / 2, 116, "TABLA DE VAULTS", {
       font: "bold 34px Courier New",
@@ -737,7 +762,7 @@ function showMenu(v) {
   );
 }
 function hud(v) {
-  [ui.bank, ui.loot, ui.mid, ui.tip, ui.goal].forEach((o) => o.setVisible(v));
+  [ui.bank, ui.rec, ui.loot, ui.mid, ui.tip, ui.goal].forEach((o) => o.setVisible(v));
   if (!v) ui.greed.setVisible(false);
 }
 function shopUi(v) {
@@ -796,6 +821,11 @@ function startGame(n) {
   chalDone = 0;
   maxGreed = 0;
   runCash = 0;
+  hi = scores[0] ? scores[0].score : 0;
+  hiBeat = 0;
+  taughtCash = 0;
+  milestone = 5000;
+  contract = F(R() * CT.length);
   fever = 0;
   hackZone = null;
   hackT = 15000;
@@ -807,6 +837,7 @@ function startGame(n) {
   if (n === 2) addPlayer((W * 2) / 3, H / 2, "p2", 1);
   music(true);
   nextWave();
+  if (contract) medal("CONTRATO · " + CT[contract][0], "#ff00b3");
 }
 function addPlayer(x, y, id, ix) {
   const p = {
@@ -814,8 +845,8 @@ function addPlayer(x, y, id, ix) {
     ix,
     color: COL[ix],
     sprite: scene.physics.add.sprite(x, y, id),
-    hp: DH[dif] + (dif < 2 ? 1 : 0),
-    max: DH[dif] + (dif < 2 ? 1 : 0),
+    hp: MX(1, DH[dif] + (dif < 2 ? 1 : 0) + CT[contract][4]),
+    max: MX(1, DH[dif] + (dif < 2 ? 1 : 0) + CT[contract][4]),
     slash: 0,
     cd: 0,
     dash: 0,
@@ -853,12 +884,12 @@ function nextWave() {
   }
   if (up[5]) players.forEach((p) => (p.over = MX(p.over, 2000 + up[5] * 1200)));
   if (wave === 1) pop(W / 2, 118, "JUNTÁ LOOT Y DEPOSITÁ CON START", "#00f3ff", 1.05);
-  if (wave % 3 === 0) spawnMega();
+  if (wave === 2 || wave % 3 === 0) spawnMega();
   if (wave % 4 === 0) spawnBoss();
   else {
-    const base = wave === 1 ? 5 : 7 + wave * 2 + F(heat / 10);
+    const base = wave === 1 ? 6 : 7 + wave * 2 + F(heat / 10);
     left = F(base * DS[dif]);
-    spawn = wave === 1 ? 520 : 250;
+    spawn = wave === 1 ? 360 : 250;
   }
   hudText();
 }
@@ -869,8 +900,8 @@ function openShop() {
   ui.greed.setVisible(false);
   ui.combo.setVisible(false);
   state = "SHOP";
-  shopT = 3300;
-  shopLock = 650;
+  shopT = 2400;
+  shopLock = 400;
   shopI = 0;
   ["P1_1", "P2_1", "START1", "START2", "P1_L", "P1_R", "P2_L", "P2_R"].forEach((k) => (input.pressed[k] = false));
   shop = [];
@@ -885,7 +916,7 @@ function openShop() {
 }
 function endWave() {
   if (flawless && chal === 3) goalDone();
-  if (wave > 1 && wave % 2 === 0) openShop();
+  if (wave > 1 && wave % 3 === 0) openShop();
   else {
     if (flawless) pop(W / 2, 130, "PERFECTA: RITMO +BANK", "#22ff88", 1.05);
     score += flawless ? 250 + wave * 50 : 0;
@@ -953,14 +984,16 @@ function addCombo(x, y) {
   comboT = 1750;
   bestCombo = MX(bestCombo, combo);
   if (combo > 2) {
+    const hot = combo >= 15;
     ui.combo
-      .setText("COMBO x" + combo + "!")
+      .setText((hot ? "EN LLAMAS x" : "COMBO x") + combo + "!")
+      .setColor(hot ? "#ff2555" : combo >= 8 ? "#ff8a00" : "#ffea00")
       .setVisible(true)
-      .setScale(1 + MN(combo / 24, 0.55));
+      .setScale(1 + MN(combo / 18, 0.8));
     if (combo % 5 === 0)
-      (scene.cameras.main.flash(90, 255, 234, 0),
-        pop(x, y - 40, "COMBO x" + combo, "#ffea00", 1.45),
-        snd("zap", 0.7, 1.8));
+      (scene.cameras.main.flash(90, 255, hot ? 60 : 234, 0),
+        pop(x, y - 40, (hot ? "EN LLAMAS x" : "COMBO x") + combo, hot ? "#ff2555" : "#ffea00", 1.45 + MN(combo / 40, 0.6)),
+        snd("zap", 0.7, MN(1.2 + combo * 0.05, 2.7)));
     if (chal === 0 && combo >= 10) goalDone();
   }
 }
@@ -990,6 +1023,9 @@ function spawnEnemy() {
   const gr = greed(); e.type = type; e.hp = (type === 'gunner' || type === 'splitter' ? 2 + F(wave / 5) : 1 + F(wave / 6)) + F(dif / 2) + (gr > 75 ? 1 : 0); e.t = 350 + R() * 650; e.val = type === 'mine' ? 90 : type === 'gunner' ? 125 : type === 'splitter' ? 145 : type === 'thief' ? 180 : 105; enemies.add(e);
   if (type === 'splitter') e.setTint(0xaa66ff);
   if (type === 'thief') e.setTint(0xffea00);
+  e.setAlpha(0.15);
+  scene.tweens.add({ targets: e, alpha: 1, duration: 300 });
+  pop(side ? 18 : W - 18, y, side ? "»" : "«", "#ff2555", 1.6);
   if (evt === 3 && !bounty) setBounty(e);
 }
 function spawnMega() {
@@ -1014,7 +1050,7 @@ function spawnBoss() {
 function greed() {
   return MN(
     100,
-    F(stash / 140 + (mult - 1) * 9 + heat * 0.38 + (extract > 0 ? 25 : 0)),
+    F((stash / 140 + (mult - 1) * 9 + heat * 0.38 + (extract > 0 ? 25 : 0)) * CT[contract][3]),
   );
 }
 function loot(v, why, x = W / 2, y = H / 2) {
@@ -1024,7 +1060,8 @@ function loot(v, why, x = W / 2, y = H / 2) {
       (1 + greed() / 260) *
       (1 + MN(combo, 35) / 120) *
       (evt === 2 ? 2 : 1) *
-      (fever ? 3 : 1),
+      (fever ? 3 : 1) *
+      CT[contract][1],
   );
   stash += add;
   heat = MN(99, heat + (2 + mult * 0.45) * DS[dif]);
@@ -1046,6 +1083,7 @@ function cashout() {
   if (stash <= 0 || cashCd > 0) return;
   if (!extract) {
     extract = MX(2100, 3000 - (up[2] || 0) * 300);
+    cdSec = 99;
     heat = MN(99, heat + 12);
     pop(
       W / 2,
@@ -1072,6 +1110,32 @@ function finishCashout() {
   extract = 0;
   scene.cameras.main.flash(gr > 74 ? 260 : 180, 255, gr > 74 ? 220 : 34, gr > 74 ? 0 : 136);
   scene.cameras.main.shake(gr > 74 ? 260 : 160, gr > 74 ? 0.022 : 0.014);
+  const cp = players.find((p) => p.hp > 0) || players[0],
+    ex = cp ? cp.sprite.x : W / 2,
+    ey = cp ? cp.sprite.y : H / 2;
+  enemies.getChildren().forEach((en) => {
+    if (!en.active) return;
+    en.hp -= 2;
+    en.hit = 120;
+    en.setTint(0xffffff);
+    const ea = Math.atan2(en.y - ey, en.x - ex);
+    if (en.body) en.body.setVelocity(C(ea) * 540, S(ea) * 540);
+    if (en.hp <= 0) kill(en, cp);
+  });
+  const ring = scene.add.graphics().setDepth(58);
+  scene.tweens.addCounter({
+    from: 0,
+    to: 1,
+    duration: 430,
+    onUpdate: (tw) => {
+      const v = tw.getValue();
+      ring.clear();
+      ring.lineStyle(9 * (1 - v), GREEN, 1 - v);
+      ring.strokeCircle(ex, ey, v * 560);
+    },
+    onComplete: () => ring.destroy(),
+  });
+  boom(ex, ey, GREEN, 24);
   snd("cash", 1.2, 1 + MN(take / 9000, 0.9));
   if (gr > 80 || take > 12000) medal("¡BANK JACKPOT!", "#ffea00");
   if (gr > 74) pop(W / 2, H / 2 - 82, "GREED CASHOUT x" + (1 + gr / 180).toFixed(2), "#ffea00", 1.25);
@@ -1108,6 +1172,12 @@ function burn(p, dmg) {
   p.inv = 900;
   scene.cameras.main.shake(140, 0.017);
   snd("hit", 1, 0.55);
+  if (p.hp === 1) {
+    pop(p.sprite.x, p.sprite.y - 44, "¡ÚLTIMO ALIENTO!", "#ff2555", 1.35);
+    snd("zap", 0.6, 0.4);
+    stop = MX(stop, 70);
+    scene.physics.pause();
+  }
   let lost = F(stash * MN(0.9, DB[dif] + (extract > 0 ? 0.28 : 0)));
   if (lost && up[4] > 0)
     ((lost = F(lost * 0.35)),
@@ -1138,6 +1208,19 @@ function hudText() {
   if (combo > 1) midText += "  •  CMB x" + combo;
   if (extract > 0) midText = "¡EXTRACCIÓN! " + Math.ceil(extract / 1000) + "s   " + midText;
   ui.mid.setText(midText);
+  if (!hiBeat && hi > 0 && score > hi) {
+    hiBeat = 1;
+    medal("¡NUEVO RÉCORD!", "#ffea00");
+  }
+  ui.rec
+    .setText(hiBeat || hi <= 0 ? "¡RÉCORD! $" + score : "RÉCORD $" + hi)
+    .setColor(hiBeat || hi <= 0 ? "#22ff88" : "#ffea00");
+  if (milestone > 0 && score >= milestone) {
+    pop(W / 2, 150, "HITO $" + milestone + " ¡SEGUÍ!", "#ffea00", 1.5);
+    snd("cash", 0.8, 1.35);
+    scene.cameras.main.flash(90, 255, 234, 0);
+    milestone *= 2;
+  }
   if (state === "PLAY")
     ui.goal.setText((chalDone ? "OBJETIVO COBRADO: " : "OBJETIVO: ") + CH[chal]).setVisible(true).setColor(chalDone ? "#22ff88" : "#ffea00");
 }
@@ -1171,6 +1254,7 @@ function bullet(x, y, a, sp, owner = "enemy") {
   b.base = sp;
   b.ang = a;
   b.setRotation(a);
+  if (owner === "enemy") b.setTint(RED);
   b.body.setVelocity(C(a) * sp, S(a) * sp);
   bullets.add(b);
 }
@@ -1231,15 +1315,38 @@ function kill(e, p, beam) {
 }
 function gameOver() {
   music(false);
-  const gt = maxGreed >= 100 ? "GREED MAX" : maxGreed >= 75 ? "CASI CODICIA TOTAL" : "VOLVÉ POR MÁS LOOT";
   clearRun();
-  state = "NAME";
   hud(false);
+  const cal = scores.length < 5 || score > (scores[scores.length - 1] ? scores[scores.length - 1].score : 0);
+  if (!cal) return showOver();
+  state = "NAME";
   name = ["A", "A", "A"];
   ni = 0;
   ui.nameTitle.setText("ROBO $" + score).setVisible(true);
-  ui.nameHelp.setText(gt + "  |  CASH " + runCash + "  |  TOP $" + bestHeist + "  |  CMB x" + bestCombo + "\nARRIBA/ABAJO LETRA  BOTÓN 1 CONFIRMA").setVisible(true);
+  ui.nameHelp.setText("¡ENTRASTE AL TOP 5!  |  CASH " + runCash + "  |  TOP $" + bestHeist + "  |  CMB x" + bestCombo + "\nARRIBA/ABAJO LETRA  BOTÓN 1 CONFIRMA").setVisible(true);
   ui.nameChars.forEach((c, i) => c.setText(name[i]).setVisible(true));
+}
+function showOver() {
+  state = "OVER";
+  hud(false);
+  [ui.nameHelp, ...ui.nameChars].forEach((o) => o.setVisible(false));
+  const beat = score > hi && hi > 0,
+    gap = hi - score,
+    close = hi > 0 && !beat && gap <= MX(500, hi * 0.15);
+  const rec = beat
+    ? "¡NUEVO RÉCORD $" + score + "!"
+    : close
+      ? "TE FALTARON $" + gap + " PARA EL RÉCORD · ¡UNA MÁS!"
+      : "RÉCORD $" + (hi || score);
+  ui.nameTitle.setText("ROBO $" + score).setVisible(true).setColor("#00f3ff");
+  ui.nameHelp
+    .setText(rec + "\nMEJOR COBRO $" + bestHeist + "  ·  CMB x" + bestCombo + "  ·  GREED " + maxGreed + "%  ·  OLA " + wave)
+    .setColor(beat ? "#ffea00" : close ? "#ff8a00" : "#88aadd")
+    .setVisible(true);
+  ui.retry.setText("START = REINTENTAR     BOTÓN 2 = MENÚ").setVisible(true);
+}
+function hideOver() {
+  [ui.nameTitle, ui.nameHelp, ui.retry].forEach((o) => o.setVisible(false));
 }
 function board() {
   state = "BOARD";
@@ -1274,7 +1381,7 @@ function update(time, delta) {
   });
   grid = (grid + delta * (0.06 + heat / 1600)) % 40;
   g.clear();
-  g.lineStyle(1.5, 0x081024, 0.55);
+  g.lineStyle(1.2, fever ? 0xff00b3 : 0x2a6bb0, 0.32);
   for (let x = 0; x < W; x += 40) {
     g.moveTo(x, 0);
     g.lineTo(x, H);
@@ -1380,7 +1487,7 @@ function update(time, delta) {
         scores.sort((a, b) => b.score - a.score);
         scores = scores.slice(0, 5);
         store().set("neon-heist-scores", scores);
-        board();
+        showOver();
       }
     }
     ui.nameChars.forEach((c, i) => {
@@ -1388,6 +1495,18 @@ function update(time, delta) {
       fx.lineStyle(i === ni ? 3 : 1, i === ni ? GREEN : 0x224466, 0.9);
       fx.strokeRect(292 + i * 80, 248, 56, 76);
     });
+    return;
+  }
+  if (state === "OVER") {
+    fx.fillStyle(0x050109, 0.86);
+    fx.fillRect(110, 76, 580, 388);
+    fx.lineStyle(4, 0xff0055, 0.75 + 0.2 * S(time / 120));
+    fx.strokeRect(110, 76, 580, 388);
+    ui.retry.setScale(1 + 0.06 * S(time / 110));
+    if (tap("START1") || tap("START2") || tap("P1_1") || tap("P2_1"))
+      (hideOver(), snd("jack", 0.5, 1.1), startGame(mode));
+    else if (tap("P1_2") || tap("P2_2"))
+      (hideOver(), (state = "MENU"), showMenu(true), snd("zap", 0.5, 0.9));
     return;
   }
   if (state === "SHOP") {
@@ -1471,6 +1590,22 @@ function update(time, delta) {
   if (extract > 0) {
     extract -= delta;
     heat = MN(99, heat + delta * 0.012);
+    players.forEach((p) => {
+      if (p.hp <= 0) return;
+      const bx = p.sprite.x;
+      fx.fillStyle(GREEN, 0.1 + 0.09 * AB(S(time / 90)));
+      fx.fillRect(bx - 16, 0, 32, p.sprite.y);
+      fx.fillStyle(GREEN, 0.3 + 0.16 * AB(S(time / 90)));
+      fx.fillRect(bx - 4, 0, 8, p.sprite.y);
+    });
+    const sec = Math.ceil(extract / 1000);
+    if (sec !== cdSec) {
+      cdSec = sec;
+      if (sec > 0 && sec <= 3 && players[0]) {
+        pop(W / 2, H / 2 - 100, "" + sec, "#22ff88", 2.2 + (3 - sec) * 0.3);
+        snd("zap", 0.55, 1 + (3 - sec) * 0.3);
+      }
+    }
     if (extract <= 0) finishCashout();
   }
   if (filter && ac)
@@ -1481,6 +1616,11 @@ function update(time, delta) {
       ac.currentTime,
     );
   if (tap("START1") || tap("START2")) cashout();
+  if (!taughtCash && wave === 1 && stash > 250 && extract <= 0 && state === "PLAY") {
+    taughtCash = 1;
+    pop(W / 2, H / 2 - 60, "↓ ¡COBRÁ YA CON START! ↓", "#ffea00", 1.7);
+    snd("zap", 0.7, 0.6);
+  }
   if (stash > 0) {
     heat = MN(99, heat + delta * (0.0012 + greed() / 90000) * DS[dif]);
     if (stash > 2500 || extract > 0)
@@ -1493,8 +1633,25 @@ function update(time, delta) {
   
   fever = greed() >= 100;
   if (fever) {
-    fx.fillStyle(0xff00b3, 0.05 + 0.03 * S(time / 60));
+    fx.fillStyle(0xff00b3, 0.07 + 0.05 * AB(S(time / 55)));
     fx.fillRect(0, 0, W, H);
+    fx.fillStyle(0xff00b3, 0.2 + 0.12 * AB(S(time / 55)));
+    fx.fillRect(0, 0, W, 60);
+    fx.fillRect(0, H - 60, W, 60);
+    fx.fillRect(0, 0, 60, H);
+    fx.fillRect(W - 60, 0, 60, H);
+  }
+  if (combo >= 10) {
+    const ci = MN((combo - 10) / 18, 1);
+    fx.lineStyle(4 + 7 * ci, combo >= 15 ? RED : GOLD, 0.35 + 0.3 * AB(S(time / 70)));
+    fx.strokeRect(3, 3, W - 6, H - 6);
+  }
+  if (state === "PLAY" && players.some((p) => p.hp === 1)) {
+    fx.fillStyle(RED, 0.1 + 0.12 * AB(S(time / 130)));
+    fx.fillRect(0, 0, W, 70);
+    fx.fillRect(0, H - 70, W, 70);
+    fx.fillRect(0, 0, 70, H);
+    fx.fillRect(W - 70, 0, 70, H);
   }
 
   hudText();
@@ -1600,6 +1757,21 @@ function update(time, delta) {
     p.mag -= delta;
     p.over -= delta;
 
+    if (fever) {
+      const vx = p.sprite.body.velocity.x,
+        vy = p.sprite.body.velocity.y,
+        vl = SQ(vx * vx + vy * vy);
+      if (vl > 40)
+        for (let i = 1; i <= 3; i++) {
+          fx.fillStyle(0xff00b3, 0.2 - i * 0.05);
+          fx.fillCircle(
+            p.sprite.x - (vx / vl) * i * 14,
+            p.sprite.y - (vy / vl) * i * 14,
+            12 - i * 2,
+          );
+        }
+    }
+
     p.statusText.setPosition(p.sprite.x, p.sprite.y - 32);
     if (p.over > 0) {
       p.statusText.setText("SOBRECARGA").setColor("#ffea00").setVisible(F(time / 150) % 2 === 0);
@@ -1668,7 +1840,7 @@ function update(time, delta) {
     if (p.slash > 0) {
       const a = p.sprite.rotation,
         rr = (p.over > 0 || fever ? 78 : 58) + (up[0] || 0) * 10;
-      fx.lineStyle(p.over > 0 || fever ? 9 : 6, p.color, 1);
+      fx.lineStyle(p.over > 0 || fever ? 9 : 6, fever ? 0xff00b3 : p.color, 1);
       fx.beginPath();
       fx.arc(p.sprite.x, p.sprite.y, rr, a - 1.15, a + 1.15);
       fx.strokePath();
@@ -1770,7 +1942,7 @@ function update(time, delta) {
 
   if (left > 0) {
     spawn -= delta;
-    if (spawn <= 0)
+    if (spawn <= 0 && enemies.countActive() < 7 + dif * 2 + (players.length - 1) * 4)
       (spawnEnemy(),
         left--,
         (spawn = MX(
@@ -1910,7 +2082,7 @@ function update(time, delta) {
           heat * 1.3 +
           greed() * 0.55) *
          DS[dif] *
-         fr;
+         fr * CT[contract][2];
       e.body.setVelocity(C(a) * sp, S(a) * sp);
     }
     alive.forEach((p) => {
@@ -2014,8 +2186,14 @@ function update(time, delta) {
     }
   });
   if (boss) {
+    if (!boss.p2 && boss.hp <= boss.max * 0.5) {
+      boss.p2 = 1;
+      medal("FASE 2: ALERTA ROJA", "#ff2555");
+      pop(W / 2, 220, "EL GUARDIÁN SE ENFURECE", "#ff2555", 1.3);
+      scene.cameras.main.shake(320, 0.02);
+    }
     boss.hit -= delta;
-    if (boss.hit <= 0) boss.clearTint();
+    if (boss.hit <= 0) boss.p2 ? boss.setTint(0xff2555) : boss.clearTint();
     if (bossBar) {
       bossBar.clear();
       bossBar.fillStyle(0x14010a, 0.9);
@@ -2032,7 +2210,7 @@ function update(time, delta) {
       boss.t -= delta * fr;
       if (boss.t <= 0) {
         boss.pat = (boss.pat + 1) % 3;
-        boss.t = (boss.pat === 2 ? 2100 : 1250) / DS[dif];
+        boss.t = (boss.pat === 2 ? 2100 : 1250) / DS[dif] / (boss.p2 ? 1.7 : 1);
         for (let i = 0; i < (boss.pat === 1 ? 9 + dif : 3); i++)
           bullet(
             boss.x,
