@@ -1381,7 +1381,7 @@ function update(time, delta) {
   });
   grid = (grid + delta * (0.06 + heat / 1600)) % 40;
   g.clear();
-  g.lineStyle(1.2, fever ? 0xff00b3 : 0x2a6bb0, 0.32);
+  g.lineStyle(1.3, fever ? 0xff00b3 : 0x081024, fever ? 0.18 : 0.42);
   for (let x = 0; x < W; x += 40) {
     g.moveTo(x, 0);
     g.lineTo(x, H);
@@ -1391,7 +1391,7 @@ function update(time, delta) {
     g.lineTo(W, y + grid);
   }
   g.strokePath();
-  g.lineStyle(1, 0x000000, 0.16);
+  g.lineStyle(1, 0x000000, 0.09);
   for (let y = 0; y < H; y += 5) {
     g.moveTo(0, y);
     g.lineTo(W, y);
