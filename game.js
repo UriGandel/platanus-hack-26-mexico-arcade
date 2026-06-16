@@ -1122,7 +1122,8 @@ function cashout() {
   }
 }
 function finishCashout() {
-  const gr = greed();
+  const gr = greed(),
+    heal = stash >= 500;
   let take = F(stash * DP[dif] * (1 + gr / 180) * (bonus > 0 ? 1.25 : 1));
   if (cashClean) take = F(take * 1.18);
   score += take;
@@ -1141,6 +1142,10 @@ function finishCashout() {
   const cp = players.find((p) => p.hp > 0) || players[0],
     ex = cp ? cp.sprite.x : W / 2,
     ey = cp ? cp.sprite.y : H / 2;
+  if (heal)
+    players.forEach((p) => {
+      if (p.hp > 0 && p.hp < p.max) ((p.hp++), pop(p.sprite.x, p.sprite.y - 44, "+1 HP BANK", "#22ff88", 1.1));
+    });
   enemies.getChildren().forEach((en) => {
     if (!en.active) return;
     en.hp -= 2;
