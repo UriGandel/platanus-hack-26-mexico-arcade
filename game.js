@@ -138,7 +138,9 @@ let combo = 0,
   hiBeat = 0,
   taughtCash = 0,
   milestone = 0,
-  contract = 0;
+  contract = 0,
+  cashClean = 0,
+  cashRush = 0;
 let ac,
   gain,
   filter,
@@ -551,8 +553,8 @@ function create() {
     .text(
       W / 2,
       428,
-      "LOOP: CORTÁ ENEMIGOS → JUNTÁ LOOT → START PARA DEPOSITAR EN BANK.\nLOOT SIN DEPOSITAR ESTÁ EN RIESGO. MÁS GREED = MÁS PREMIO + MÁS PELIGRO.\nP1 WASD  SLASH U  DASH I  START ENTER  |  P2 FLECHAS  SLASH R  DASH T  START 2",
-      { font: "13px monospace", fill: "#b8d7ff", align: "center" },
+      "MATA -> ROBA CORES -> START = BANK\nP1 WASD  SLASH U  DASH I  |  P2 FLECHAS  SLASH R  DASH T",
+      { font: "bold 16px monospace", fill: "#b8d7ff", align: "center" },
     )
     .setOrigin(0.5);
   ui.help = this.add
@@ -564,18 +566,18 @@ function create() {
     )
     .setOrigin(0.5);
   ui.bank = this.add
-    .text(22, 14, "", { font: "bold 22px Courier New", fill: "#fff" })
+    .text(22, 14, "", { font: "bold 17px Courier New", fill: "#fff" })
     .setVisible(false);
   ui.rec = this.add
     .text(22, 40, "", { font: "bold 13px Courier New", fill: "#ffea00" })
     .setVisible(false);
   ui.loot = this.add
-    .text(W - 22, 14, "", { font: "bold 22px Courier New", fill: "#22ff88" })
+    .text(W - 22, 14, "", { font: "bold 17px Courier New", fill: "#22ff88" })
     .setOrigin(1, 0)
     .setVisible(false);
   ui.mid = this.add
     .text(W / 2, 10, "", {
-      font: "bold 22px Courier New",
+      font: "bold 19px Courier New",
       fill: "#ffea00",
       align: "center",
     })
@@ -623,6 +625,15 @@ function create() {
     .setOrigin(0.5)
     .setVisible(false)
     .setDepth(45);
+  ui.cash = this.add
+    .text(W / 2, H / 2 - 112, "", {
+      font: "bold 32px Courier New",
+      fill: "#22ff88",
+      align: "center",
+    })
+    .setOrigin(0.5)
+    .setVisible(false)
+    .setDepth(48);
   ui.shopTitle = this.add
     .text(W / 2, 118, "BONUS SHOP - PICK RÁPIDO", {
       font: "bold 34px Courier New",
@@ -663,7 +674,7 @@ function create() {
     .text(
       W / 2,
       284,
-      "CORTÁ ENEMIGOS\nJUNTÁ LOOT\nSTART PARA DEPOSITAR EN BANK\nMÁS GREED = MÁS PREMIO + MÁS PELIGRO\n2P: REVIVÍ ACERCÁNDOTE",
+      "1  CORTÁ ENEMIGOS\n2  CORES = LOOT EN RIESGO\n3  START = BANK SEGURO\n4  GREED PAGA MÁS, DUELE MÁS",
       {
         font: "bold 22px Courier New",
         fill: "#fff",
@@ -763,10 +774,10 @@ function showMenu(v) {
 }
 function hud(v) {
   [ui.bank, ui.rec, ui.loot, ui.mid, ui.tip, ui.goal].forEach((o) => o.setVisible(v));
-  if (!v) ui.greed.setVisible(false);
+  if (!v) (ui.greed.setVisible(false), ui.cash.setVisible(false));
 }
 function shopUi(v) {
-  if (v) (ui.greed.setVisible(false), ui.combo.setVisible(false), ui.goal.setVisible(false), ui.tip.setVisible(false));
+  if (v) (ui.greed.setVisible(false), ui.combo.setVisible(false), ui.cash.setVisible(false), ui.goal.setVisible(false), ui.tip.setVisible(false));
   [ui.shopTitle, ui.shopHelp, ...ui.cards].forEach((o) => o.setVisible(v));
 }
 function tutUi(v) {
@@ -781,6 +792,7 @@ function clearRun() {
   shopUi(false);
   tutUi(false);
   ui.combo.setVisible(false);
+  ui.cash.setVisible(false);
   if (bossBar) bossBar.clear();
   if (boss) boss.destroy();
   boss = null;
@@ -808,6 +820,7 @@ function startGame(n) {
   bonus = 0;
   cashCd = 0;
   extract = 0;
+  cashClean = cashRush = 0;
   bestHeist = 0;
   lastCash = 0;
   heist = 0;
@@ -883,13 +896,20 @@ function nextWave() {
     pop(W / 2, 130, "VAULT SURGE: ¡+HP, BONO CASH!", "#22ff88", 1.2);
   }
   if (up[5]) players.forEach((p) => (p.over = MX(p.over, 2000 + up[5] * 1200)));
-  if (wave === 1) pop(W / 2, 118, "JUNTÁ LOOT Y DEPOSITÁ CON START", "#00f3ff", 1.05);
-  if (wave === 2 || wave % 3 === 0) spawnMega();
-  if (wave % 4 === 0) spawnBoss();
+  if (wave === 1) {
+    pop(W / 2, 118, "1: CORTÁ  2: JUNTÁ  3: START = BANK", "#00f3ff", 1.05);
+    const c = scene.physics.add.sprite(W / 2, H / 2 + 92, "core");
+    c.val = 240;
+    c.body.setDrag(100);
+    cores.add(c);
+    pop(c.x, c.y - 36, "CORE: LOOT EN RIESGO", "#22ff88", 1.05);
+  }
+  if (wave === 2 || wave % 4 === 0) spawnMega();
+  if (wave % 3 === 0) spawnBoss();
   else {
-    const base = wave === 1 ? 6 : 7 + wave * 2 + F(heat / 10);
+    const base = wave === 1 ? 4 : 7 + wave * 2 + F(heat / 10);
     left = F(base * DS[dif]);
-    spawn = wave === 1 ? 360 : 250;
+    spawn = wave === 1 ? 650 : 250;
   }
   hudText();
 }
@@ -900,7 +920,7 @@ function openShop() {
   ui.greed.setVisible(false);
   ui.combo.setVisible(false);
   state = "SHOP";
-  shopT = 2400;
+  shopT = 3500;
   shopLock = 400;
   shopI = 0;
   ["P1_1", "P2_1", "START1", "START2", "P1_L", "P1_R", "P2_L", "P2_R"].forEach((k) => (input.pressed[k] = false));
@@ -916,7 +936,7 @@ function openShop() {
 }
 function endWave() {
   if (flawless && chal === 3) goalDone();
-  if (wave > 1 && wave % 3 === 0) openShop();
+  if (wave > 2 && wave % 3 === 0) openShop();
   else {
     if (flawless) pop(W / 2, 130, "PERFECTA: RITMO +BANK", "#22ff88", 1.05);
     score += flawless ? 250 + wave * 50 : 0;
@@ -1083,22 +1103,28 @@ function cashout() {
   if (stash <= 0 || cashCd > 0) return;
   if (!extract) {
     extract = MX(2100, 3000 - (up[2] || 0) * 300);
+    cashClean = 1;
+    cashRush = 180;
     cdSec = 99;
     heat = MN(99, heat + 12);
     pop(
       W / 2,
       H / 2 - 62,
-      "EXTRACCIÓN: AGUANTÁ " + (extract / 1000).toFixed(1) + "s",
+      "¡BANKING! SOBREVIVÍ",
       "#ffea00",
       1.55,
     );
+    ui.cash.setText("BANKING... HOLD ON").setColor("#22ff88").setVisible(true);
+    scene.cameras.main.flash(150, 255, 234, 0);
+    scene.cameras.main.shake(120, 0.01);
     snd("zap", 0.9, 0.55);
     hudText();
   }
 }
 function finishCashout() {
-  const gr = greed(),
-    take = F(stash * DP[dif] * (1 + gr / 180) * (bonus > 0 ? 1.25 : 1));
+  const gr = greed();
+  let take = F(stash * DP[dif] * (1 + gr / 180) * (bonus > 0 ? 1.25 : 1));
+  if (cashClean) take = F(take * 1.18);
   score += take;
   runCash++;
   lastCash = take;
@@ -1108,6 +1134,8 @@ function finishCashout() {
   mult = MX(1, +(mult * 0.5).toFixed(2));
   cashCd = 1200;
   extract = 0;
+  cashRush = 0;
+  ui.cash.setVisible(false);
   scene.cameras.main.flash(gr > 74 ? 260 : 180, 255, gr > 74 ? 220 : 34, gr > 74 ? 0 : 136);
   scene.cameras.main.shake(gr > 74 ? 260 : 160, gr > 74 ? 0.022 : 0.014);
   const cp = players.find((p) => p.hp > 0) || players[0],
@@ -1137,7 +1165,8 @@ function finishCashout() {
   });
   boom(ex, ey, GREEN, 24);
   snd("cash", 1.2, 1 + MN(take / 9000, 0.9));
-  if (gr > 80 || take > 12000) medal("¡BANK JACKPOT!", "#ffea00");
+  if (cashClean) pop(W / 2, H / 2 - 112, "PERFECT BANK +18%", "#22ff88", 1.45);
+  if (gr > 80 || take > 12000 || cashClean) medal(cashClean ? "¡PERFECT BANK!" : "¡BANK JACKPOT!", "#ffea00");
   if (gr > 74) pop(W / 2, H / 2 - 82, "GREED CASHOUT x" + (1 + gr / 180).toFixed(2), "#ffea00", 1.25);
   if (chal === 2 && take >= 5000) goalDone();
   pop(W / 2, H / 2 - 40, "BANK +" + take, gr > 74 ? "#ffea00" : "#22ff88", 1.8);
@@ -1186,7 +1215,10 @@ function burn(p, dmg) {
   stash -= lost;
   if (extract > 0)
     ((extract = 0),
-      pop(W / 2, H / 2 - 78, "FALLÓ: LOOT EN RIESGO", "#ff2555", 1.45));
+      (cashClean = cashRush = 0),
+      ui.cash.setVisible(false),
+      scene.cameras.main.flash(170, 255, 0, 55),
+      pop(W / 2, H / 2 - 78, "BANK CANCELADO · ¡UNA MÁS!", "#ff2555", 1.45));
   combo = comboT = 0;
   flawless = 0;
   mult = 1;
@@ -1202,9 +1234,9 @@ function burn(p, dmg) {
   boom(p.sprite.x, p.sprite.y, RED, 18);
 }
 function hudText() {
-  ui.bank.setText("BANK: $" + score);
-  ui.loot.setText("LOOT: $" + stash);
-  let midText = DN[dif] + "  •  OLA " + wave + "  •  MULT x" + mult.toFixed(2);
+  ui.bank.setText("BANK $" + score);
+  ui.loot.setText("RIESGO $" + stash);
+  let midText = "OLA " + wave + "  •  x" + mult.toFixed(2);
   if (combo > 1) midText += "  •  CMB x" + combo;
   if (extract > 0) midText = "¡EXTRACCIÓN! " + Math.ceil(extract / 1000) + "s   " + midText;
   ui.mid.setText(midText);
@@ -1221,8 +1253,13 @@ function hudText() {
     scene.cameras.main.flash(90, 255, 234, 0);
     milestone *= 2;
   }
-  if (state === "PLAY")
-    ui.goal.setText((chalDone ? "OBJETIVO COBRADO: " : "OBJETIVO: ") + CH[chal]).setVisible(true).setColor(chalDone ? "#22ff88" : "#ffea00");
+  if (state === "PLAY") {
+    const ct = CT[contract][0].split(":")[0];
+    ui.goal
+      .setText("CONTRATO: " + ct + "  |  " + (chalDone ? "OBJ COBRADO: " : "OBJ: ") + CH[chal])
+      .setVisible(true)
+      .setColor(chalDone ? "#22ff88" : "#ffea00");
+  }
 }
 function pop(x, y, t, c = "#fff", s = 1) {
   const a = scene.add
@@ -1313,6 +1350,10 @@ function kill(e, p, beam) {
   snd("hit", 0.8, 1 + MN(combo / 30, 0.6));
   e.destroy();
 }
+function rank() {
+  const v = score + wave * 900 + bestCombo * 260 + maxGreed * 45 + bestHeist * 0.22;
+  return v > 52000 ? "S+" : v > 32000 ? "S" : v > 18000 ? "A" : v > 8500 ? "B" : "C";
+}
 function gameOver() {
   music(false);
   clearRun();
@@ -1322,8 +1363,8 @@ function gameOver() {
   state = "NAME";
   name = ["A", "A", "A"];
   ni = 0;
-  ui.nameTitle.setText("ROBO $" + score).setVisible(true);
-  ui.nameHelp.setText("¡ENTRASTE AL TOP 5!  |  CASH " + runCash + "  |  TOP $" + bestHeist + "  |  CMB x" + bestCombo + "\nARRIBA/ABAJO LETRA  BOTÓN 1 CONFIRMA").setVisible(true);
+  ui.nameTitle.setText("RANK " + rank() + "  ·  ROBO $" + score).setVisible(true);
+  ui.nameHelp.setText("¡TOP 5!  BANK $" + score + "  |  OLA " + wave + "  |  GREED " + maxGreed + "%\nMEJOR CASHOUT $" + bestHeist + "  |  COMBO x" + bestCombo + "  |  BOTÓN 1 CONFIRMA").setVisible(true);
   ui.nameChars.forEach((c, i) => c.setText(name[i]).setVisible(true));
 }
 function showOver() {
@@ -1337,13 +1378,16 @@ function showOver() {
     ? "¡NUEVO RÉCORD $" + score + "!"
     : close
       ? "TE FALTARON $" + gap + " PARA EL RÉCORD · ¡UNA MÁS!"
-      : "RÉCORD $" + (hi || score);
-  ui.nameTitle.setText("ROBO $" + score).setVisible(true).setColor("#00f3ff");
+      : bestCombo >= 10
+        ? "MEJOR COMBO x" + bestCombo + " · PODÉS ROMPERLO"
+        : "RÉCORD $" + (hi || score) + " · SUBÍ EL GREED";
+  ui.nameTitle.setText("RANK " + rank() + "  ·  BANK $" + score).setVisible(true).setColor(beat ? "#ffea00" : "#00f3ff");
   ui.nameHelp
-    .setText(rec + "\nMEJOR COBRO $" + bestHeist + "  ·  CMB x" + bestCombo + "  ·  GREED " + maxGreed + "%  ·  OLA " + wave)
+    .setText(rec + "\nOLA " + wave + "  ·  CASHOUT $" + bestHeist + "  ·  COMBO x" + bestCombo + "\nGREED MÁX " + maxGreed + "%  ·  " + (lastCash ? "ÚLTIMO BANK $" + lastCash : "START PARA UNA MÁS"))
     .setColor(beat ? "#ffea00" : close ? "#ff8a00" : "#88aadd")
     .setVisible(true);
-  ui.retry.setText("START = REINTENTAR     BOTÓN 2 = MENÚ").setVisible(true);
+  ui.retry.setText("START = UNA MÁS     BOTÓN 2 = MENÚ").setVisible(true);
+  scene.cameras.main.flash(beat ? 260 : 130, 255, beat ? 234 : 0, beat ? 0 : 85);
 }
 function hideOver() {
   [ui.nameTitle, ui.nameHelp, ui.retry].forEach((o) => o.setVisible(false));
@@ -1448,13 +1492,8 @@ function update(time, delta) {
     fx.strokeRect(64, 58, 672, 486);
     fx.lineStyle(3, 0xff00b3, 0.85);
     fx.strokeRect(94, 150, 612, 252);
-    fx.fillStyle(0x22ff88, 0.85);
-    fx.fillRect(143, 244, 22, 22);
-    fx.fillRect(635, 244, 22, 22);
-    fx.lineStyle(4, GOLD, 0.9);
-    fx.beginPath();
-    fx.arc(400, 274, 70, -0.95, 0.95);
-    fx.strokePath();
+    fx.lineStyle(2, GOLD, 0.65 + 0.25 * S(time / 100));
+    fx.strokeRect(124, 184, 552, 184);
     ui.tutHelp.setScale(1 + 0.05 * S(time / 90));
     if (tap("START1") || tap("START2") || tap("P1_1") || tap("P2_1"))
       (tutUi(false), startGame(tut));
@@ -1590,9 +1629,26 @@ function update(time, delta) {
   if (extract > 0) {
     extract -= delta;
     heat = MN(99, heat + delta * 0.012);
+    cashRush -= delta;
+    if (state === "PLAY" && cashRush <= 0 && enemies.countActive() < 10 + dif * 2) {
+      spawnEnemy();
+      cashRush = MX(320, 620 - wave * 25 - greed() * 2);
+      pop(W / 2, H / 2 + 76, "ALERTA BANK", "#ff2555", 1.05);
+    }
+    ui.cash
+      .setText("BANKING... HOLD ON\n" + Math.ceil(extract / 1000))
+      .setColor(F(time / 140) % 2 ? "#22ff88" : "#ffea00")
+      .setScale(1 + 0.04 * S(time / 70))
+      .setVisible(true);
     players.forEach((p) => {
       if (p.hp <= 0) return;
       const bx = p.sprite.x;
+      fx.fillStyle(cashClean ? GREEN : RED, 0.08 + 0.05 * AB(S(time / 80)));
+      fx.fillCircle(p.sprite.x, p.sprite.y, 96 + 10 * S(time / 95));
+      fx.lineStyle(7, cashClean ? GREEN : RED, 0.65 + 0.25 * AB(S(time / 70)));
+      fx.strokeCircle(p.sprite.x, p.sprite.y, 66 + 7 * S(time / 70));
+      fx.lineStyle(2, GOLD, 0.45);
+      fx.strokeCircle(p.sprite.x, p.sprite.y, 104 + 12 * S(time / 65));
       fx.fillStyle(GREEN, 0.1 + 0.09 * AB(S(time / 90)));
       fx.fillRect(bx - 16, 0, 32, p.sprite.y);
       fx.fillStyle(GREEN, 0.3 + 0.16 * AB(S(time / 90)));
@@ -1602,7 +1658,7 @@ function update(time, delta) {
     if (sec !== cdSec) {
       cdSec = sec;
       if (sec > 0 && sec <= 3 && players[0]) {
-        pop(W / 2, H / 2 - 100, "" + sec, "#22ff88", 2.2 + (3 - sec) * 0.3);
+        pop(W / 2, H / 2 - 100, "" + sec, "#22ff88", 2.5 + (3 - sec) * 0.34);
         snd("zap", 0.55, 1 + (3 - sec) * 0.3);
       }
     }
@@ -1667,26 +1723,31 @@ function update(time, delta) {
       if (hackZone) {
         fx.lineStyle(3, 0x00f3ff, 0.5 + 0.3 * S(time / 100));
         fx.strokeCircle(hackZone.x, hackZone.y, 60);
-        let hacking = false;
+        let hacking = 0;
         players.forEach(p => {
           if (p.hp > 0 && Phaser.Math.Distance.Between(p.sprite.x, p.sprite.y, hackZone.x, hackZone.y) < 60) {
-            hacking = true;
+            hacking++;
           }
         });
         if (hacking) {
-          hackP += delta;
+          const coop = mode === 2 && hacking > 1;
+          hackP += delta * (coop ? 2.2 : 1);
           fx.fillStyle(0x00f3ff, 0.3);
           fx.beginPath();
           fx.moveTo(hackZone.x, hackZone.y);
           fx.arc(hackZone.x, hackZone.y, 60, -P / 2, -P / 2 + (hackP / 3000) * P * 2);
           fx.fillPath();
+          if (coop) {
+            fx.lineStyle(5, GREEN, 0.65 + 0.25 * S(time / 70));
+            fx.strokeCircle(hackZone.x, hackZone.y, 78);
+          }
           if (hackP >= 3000) {
-            medal("HACK JACKPOT", "#22ff88");
-            pop(hackZone.x, hackZone.y, "CORES EXTRA", "#22ff88", 1.4);
+            medal(coop ? "SYNC HACK!" : "HACK JACKPOT", "#22ff88");
+            pop(hackZone.x, hackZone.y, coop ? "CO-OP CORES x2" : "CORES EXTRA", "#22ff88", 1.4);
             snd("jack", 1, 1.2);
-            for (let i = 0; i < 15; i++) {
+            for (let i = 0; i < (coop ? 24 : 15); i++) {
               const c = scene.physics.add.sprite(hackZone.x, hackZone.y, "core");
-              c.val = 150;
+              c.val = coop ? 180 : 150;
               c.body.setVelocity((R() - 0.5) * 400, (R() - 0.5) * 400);
               c.body.setDrag(150);
               cores.add(c);
@@ -1856,6 +1917,16 @@ function update(time, delta) {
         )
           return;
         en.hit = 120;
+        if (mode === 2 && en.by && en.by !== p.id && time - en.bt < 520 && !en.sync) {
+          en.sync = 1;
+          en.hp -= 2;
+          loot(180, "SYNC KILL", en.x, en.y);
+          boost(0.22);
+          boom(en.x, en.y, GOLD, 18);
+          medal("SYNC KILL", "#22ff88");
+        }
+        en.by = p.id;
+        en.bt = time;
         let dmg = 1;
         if (en.mark) {
           dmg = 2;
@@ -2028,13 +2099,28 @@ function update(time, delta) {
             -P / 2 + P * 2 * MN(1, ded.rev / 3000),
           );
           fx.strokePath();
-          if (ded.rev >= 3000)
+          if (ded.rev >= 3000) {
+            enemies.getChildren().forEach((e) => {
+              if (!e.active) return;
+              const d = Phaser.Math.Distance.Between(ded.sprite.x, ded.sprite.y, e.x, e.y);
+              if (d < 180) {
+                const a = Math.atan2(e.y - ded.sprite.y, e.x - ded.sprite.x);
+                e.hp -= 2;
+                e.hit = 140;
+                e.setTint(0xffffff);
+                e.body.setVelocity(C(a) * 620, S(a) * 620);
+                if (e.hp <= 0) kill(e, sav);
+              }
+            });
             ((ded.hp = 1),
               (ded.inv = 1600),
               (ded.rev = 0),
               ded.sprite.setAlpha(1),
-              pop(ded.sprite.x, ded.sprite.y - 42, "¡REVIVIDO!", "#22ff88", 1.35),
+              pop(ded.sprite.x, ded.sprite.y - 42, "REVIVE BLAST", "#22ff88", 1.35),
+              boom(ded.sprite.x, ded.sprite.y, GREEN, 35),
+              scene.cameras.main.shake(160, 0.014),
               snd("jack", 0.9, 1.1));
+          }
         } else ded.rev = 0;
       });
   enemies.getChildren().forEach((e) => {
@@ -2055,6 +2141,22 @@ function update(time, delta) {
         target.sprite.y,
       );
     e.setRotation(a);
+    if (e.type === "gunner" && d < 300 && e.t < 650) {
+      fx.lineStyle(e.t < 260 ? 4 : 2, e.t < 260 ? RED : 0xff8a00, e.t < 260 ? 0.8 : 0.28);
+      fx.beginPath();
+      fx.moveTo(e.x, e.y);
+      fx.lineTo(target.sprite.x, target.sprite.y);
+      fx.strokePath();
+    } else if (e.type === "mine") {
+      fx.lineStyle(2, RED, 0.35 + 0.25 * AB(S(time / 80)));
+      fx.strokeCircle(e.x, e.y, 35 + 9 * S(time / 70));
+    } else if (e.type === "thief") {
+      fx.lineStyle(3, GOLD, 0.45 + 0.25 * AB(S(time / 90)));
+      fx.strokeCircle(e.x, e.y, e.flee ? 32 : 24);
+    } else if (e.type === "splitter") {
+      fx.lineStyle(2, 0xaa66ff, 0.45);
+      fx.strokeCircle(e.x, e.y, 30);
+    }
     if (e.type === "thief") {
       if (e.flee) {
         const aFlee = Math.atan2(e.y - H / 2, e.x - W / 2);
@@ -2131,6 +2233,8 @@ function update(time, delta) {
           e.hp -= 0.55;
           e.hit = 120;
           e.setTint(0xffffff);
+          loot(18, "ENLACE", e.x, e.y);
+          boost(0.02);
           if (e.hp <= 0) kill(e, alive[0], true);
         }
       });
@@ -2228,18 +2332,18 @@ function update(time, delta) {
     if (dedPlayer) {
       ui.tip.setText("REVIVE: ACERCATE 3s AL COMPAÑERO").setColor("#ff2555").setVisible(F(time / 200) % 2 === 0);
     } else if (extract > 0) {
-      ui.tip.setText("EXTRACCIÓN ACTIVA: SI TE PEGAN SE CANCELA").setColor("#ffea00").setVisible(true);
+      ui.tip.setText("NO TE DEJES PEGAR: EL BANK SE CANCELA").setColor("#ffea00").setVisible(true);
     } else if (greed() >= 75) {
       ui.tip.setText(greed() >= 100 ? "GREED MAX: CADA GOLPE DUELE x2" : "GREED ALTO: START = BANK, GOLPE = LOOT PERDIDO").setColor("#ff2555").setVisible(F(time / 180) % 2 === 0);
-    } else if (stash > 2500) {
-      ui.tip.setText("LOOT EN RIESGO: START PARA DEPOSITAR").setColor("#22ff88").setVisible(F(time / 250) % 2 === 0);
+    } else if (stash > 250) {
+      ui.tip.setText("START = DEPOSITAR  ·  LOOT EN RIESGO").setColor(stash > 2500 ? "#ffea00" : "#22ff88").setVisible(F(time / 250) % 2 === 0);
     } else if (cores.countActive() > 0) {
       const c = cores.getChildren()[0];
       const d1 = players[0] ? Phaser.Math.Distance.Between(c.x, c.y, players[0].sprite.x, players[0].sprite.y) : 999;
       if (d1 > 180) {
-        ui.tip.setText("CORES VERDES = LOOT, NO BANK TODAVÍA").setColor("#22ff88").setVisible(true);
+        ui.tip.setText("CORES = LOOT").setColor("#22ff88").setVisible(true);
       } else {
-        ui.tip.setText("JUNTÁ CORES Y DECIDÍ CUÁNDO COBRAR").setColor("#00f3ff").setVisible(true);
+        ui.tip.setText("JUNTÁ CORES").setColor("#00f3ff").setVisible(true);
       }
     } else {
       const tips = [
